@@ -531,13 +531,24 @@ Configure auto-numbering [sys_number] for a table.
 
 The autoNumber object is a property within the Table object.
 
+## IMPORTANT: Auto-Numbering Setup Requirements
+
+Auto-numbering requires **TWO components** to work properly:
+
+1. **A number field in the table schema** with the auto-numbering default function
+2. **EITHER** an `autoNumber` property on the Table object **OR** an explicit `sys_number` Record
+
+### Recommended Approach: Use Record API for sys_number
+
+While the `autoNumber` property on Table works, using the Record API to create the sys_number record explicitly is more reliable and matches ServiceNow's standard approach.
+
 Properties
 Name	Type	Description
 prefix	String	A prefix for every record number in the table. For example, INC for Incident.
 Default: pre
 
 number	Integer	The base record number for this table. Record numbers are automatically incremented, and the next number is maintained in the Counter [sys_number_counter] table.
-If you set the base number to a value higher than the current counter, the next record number uses the new base number. Otherwise the next record number uses the current counter. The counter doesn’t reset to a base number lower than itself.
+If you set the base number to a value higher than the current counter, the next record number uses the new base number. Otherwise the next record number uses the current counter. The counter doesn't reset to a base number lower than itself.
 
 Default: 1000
 
@@ -547,15 +558,99 @@ Leading zeros are added to auto-numbers, if necessary. For example, INC0001001 c
 Warning: Changing this field can update all number values for existing records on a table. Take care when changing this field on a production instance.
 Default: 7
 
-Example
+## Complete Auto-Numbering Examples
+
+### Method 1: Using Record API (RECOMMENDED)
 Explain this code
-autoNumber: {
-   prefix: 'TODO',
-   number: 2000,
-   numberOfDigits: 9,
-}
-To use the number in a table, you need to create a number column that uses the number as the default value. For example:
+import { Table, StringColumn, Record } from '@servicenow/sdk/core'
+
+// Create the sys_number record for auto-numbering
+export const myTableNumbering = Record({
+  table: 'sys_number',
+  $id: Now.ID['my_table_numbering'],
+  data: {
+    category: 'x_12345_mytable',  // Must match your table name
+    prefix: 'REQ',
+    number: 1000,
+    maximum_digits: 7,
+  },
+})
+
+// Create the table with number field
+export const myTable = Table({
+  name: 'x_12345_mytable',
+  label: 'My Table',
+  schema: {
+    number: StringColumn({
+      label: 'Number',
+      maxLength: 40,
+      readOnly: true,
+      default: 'javascript:global.getNextObjNumberPadded();',
+    }),
+    // ... other fields
+  },
+})
+
+### Method 2: Using autoNumber property on Table
 Explain this code
-number: IntegerColumn({             
-   default: 'javascript:getNextObjNumberPadded();'
+import { Table, StringColumn } from '@servicenow/sdk/core'
+
+export const myTable = Table({
+  name: 'x_12345_mytable',
+  label: 'My Table',
+  schema: {
+    number: StringColumn({
+      label: 'Number',
+      maxLength: 40,
+      readOnly: true,
+      default: 'javascript:global.getNextObjNumberPadded();',
+    }),
+    // ... other fields
+  },
+  autoNumber: {
+    prefix: 'REQ',
+    number: 1000,
+    numberOfDigits: 7,
+  },
+})
+
+## Key Points
+
+1. **Number field type**: Use `StringColumn`, not `IntegerColumn` (auto-numbers are strings like "REQ0001000")
+2. **Default function**: Must be `'javascript:global.getNextObjNumberPadded();'` (with `global.` prefix)
+3. **Read-only**: Always set `readOnly: true` so users can't manually edit
+4. **Category field**: In sys_number Record, `category` must exactly match your table name
+5. **maximum_digits vs numberOfDigits**: 
+   - In Record API: use `maximum_digits` (matches ServiceNow sys_number field name)
+   - In autoNumber property: use `numberOfDigits` (Fluent API convention)
+
+## Common Mistakes
+
+### ❌ WRONG - Missing default function
+Explain this code
+number: StringColumn({
+  label: 'Number',
+  readOnly: true,
+  // Missing default - won't auto-generate!
+})
+
+### ❌ WRONG - Using IntegerColumn
+Explain this code
+number: IntegerColumn({  // WRONG type
+  default: 'javascript:global.getNextObjNumberPadded();'
+})
+
+### ❌ WRONG - Missing 'global.' prefix
+Explain this code
+number: StringColumn({
+  default: 'javascript:getNextObjNumberPadded();'  // Missing global.
+})
+
+### ✅ CORRECT - Complete setup
+Explain this code
+number: StringColumn({
+  label: 'Number',
+  maxLength: 40,
+  readOnly: true,
+  default: 'javascript:global.getNextObjNumberPadded();',
 })

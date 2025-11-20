@@ -33,6 +33,30 @@
     // reference: 'sys_user'     // ❌ WRONG - will not work
   })
   ```
+- **Auto-Numbering**: Requires TWO parts - a number field AND a sys_number record (RECOMMENDED: use Record API):
+  ```typescript
+  // 1. Create sys_number record
+  export const myTableNumbering = Record({
+    table: 'sys_number',
+    $id: Now.ID['my_table_numbering'],
+    data: {
+      category: 'x_12345_mytable',  // MUST match table name
+      prefix: 'REQ',
+      number: 1000,
+      maximum_digits: 7,
+    },
+  })
+  
+  // 2. Add number field to table schema
+  schema: {
+    number: StringColumn({  // Use StringColumn, NOT IntegerColumn
+      label: 'Number',
+      maxLength: 40,
+      readOnly: true,
+      default: 'javascript:global.getNextObjNumberPadded();',  // MUST include global.
+    }),
+  }
+  ```
 
 ## Key Constraints
 - ROBUSTPROMPT.md: Read this first for app requirements (goal, data model, automation, security)
