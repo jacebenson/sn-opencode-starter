@@ -341,6 +341,73 @@ Explain this code
 schema: {
    x_scope_myColumn: StringColumn({...})
 }
+
+## ReferenceColumn - IMPORTANT
+
+**CRITICAL:** When creating reference fields, you MUST use the `referenceTable` property (NOT `reference`).
+
+### Properties
+Name	Type	Description
+referenceTable	String	**REQUIRED for ReferenceColumn.** The name of the table being referenced (e.g., 'sys_user', 'cmdb_ci', 'incident'). This is the correct property name - do NOT use `reference`.
+cascadeRule	String	Configure what happens to records that reference a record when that record is deleted.
+Valid values:
+- none: No cascade behavior
+- delete_no_workflow: Delete referencing records without running workflows
+- cascade: Delete referencing records with workflows
+- delete: Delete referencing records
+- restrict: Prevent deletion if references exist
+- clear: Clear the reference field value
+
+Default: none
+
+referenceFloats	Boolean	Flag that indicates whether the referenced table's form has an "edit" button in the related list.
+Valid values:
+- true: Show edit button in related lists
+- false: No edit button
+
+dynamicCreation	Boolean	Flag that indicates whether to allow creation of a new record in the referenced table if the reference is not found.
+Valid values:
+- true: Allow dynamic creation
+- false: Don't allow dynamic creation
+
+dynamicCreationScript	String	Script to populate a new record from a reference field based on the field value.
+referenceKey	String	Sets up a many-to-many relationship. The value specified is the label describing the relationship.
+referenceQual	String	Filter reference based on a filter condition, referenced value, or sys_filter_option_dynamic sys_id.
+
+### Example - CORRECT Usage
+Explain this code
+schema: {
+   owner: ReferenceColumn({
+      label: 'Owner',
+      referenceTable: 'sys_user',  // CORRECT - use referenceTable
+      mandatory: true,
+   }),
+   assigned_to: ReferenceColumn({
+      label: 'Assigned To',
+      referenceTable: 'sys_user',
+      referenceQual: 'active=true',  // Filter to only active users
+   }),
+   parent_task: ReferenceColumn({
+      label: 'Parent Task',
+      referenceTable: 'task',
+      cascadeRule: 'none',
+   }),
+}
+
+### Common Mistake - INCORRECT Usage
+Explain this code
+// ❌ WRONG - This will NOT work!
+owner: ReferenceColumn({
+   label: 'Owner',
+   reference: 'sys_user',  // WRONG property name
+})
+
+// ✅ CORRECT - Use this instead
+owner: ReferenceColumn({
+   label: 'Owner',
+   referenceTable: 'sys_user',  // CORRECT property name
+})
+
 choices object
 Configure choices [sys_choice] for a column in a table.
 

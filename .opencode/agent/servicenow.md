@@ -183,6 +183,48 @@ src/fluent/
 - **Roles**: `x_<scope>.<role>` (scope.role) - e.g., `x_12345.user`
 - **Scope Names**: `x_<vendor>_<app>` (must include vendor code) - e.g., `x_12345_myapp`
 
+## Critical Fluent API Syntax Rules
+
+### ⚠️ CRITICAL: Table Schema Structure
+**Schema must be an OBJECT with field names as keys** (NOT an array):
+
+```typescript
+// ✅ CORRECT
+schema: {
+  fieldName: StringColumn({ label: 'Label' }),
+  anotherField: IntegerColumn({ label: 'Count' }),
+}
+
+// ❌ WRONG - Do NOT use array
+schema: [
+  StringColumn({ name: 'fieldName', label: 'Label' }),  // WRONG!
+]
+```
+
+### ⚠️ CRITICAL: ReferenceColumn Property Name
+**MUST use `referenceTable` property** (NOT `reference`):
+
+```typescript
+// ✅ CORRECT - Use referenceTable
+owner: ReferenceColumn({
+  label: 'Owner',
+  referenceTable: 'sys_user',  // CORRECT property name
+  mandatory: true,
+})
+
+// ❌ WRONG - Do NOT use reference
+owner: ReferenceColumn({
+  label: 'Owner',
+  reference: 'sys_user',  // WRONG! Will create broken reference field
+})
+```
+
+**Other ReferenceColumn properties:**
+- `cascadeRule`: 'none' | 'delete' | 'cascade' | 'restrict' | 'clear'
+- `referenceQual`: Filter condition for reference lookup
+- `referenceFloats`: Enable edit button in related lists
+- `dynamicCreation`: Allow creating new referenced records on the fly
+
 ## Query Syntax Reference (for Table API)
 
 ### Basic Operators

@@ -18,6 +18,21 @@
 - Imports: Use `@servicenow/sdk/core` for Fluent types, `@servicenow/glide` for Glide APIs
 - Naming: Vendor-prefixed scopes required: `x_<vendor>_<appname>` (get vendor via `sn_api_getVendorCode`)
 - Error handling: Use Business Rules for validation, throw errors in before-insert/update rules
+- **Table Schema**: Schema is an OBJECT (not array), with field names as keys:
+  ```typescript
+  schema: {
+    fieldName: StringColumn({ label: 'Label' }),
+    // NOT an array
+  }
+  ```
+- **Reference Fields**: MUST use `referenceTable` property (NOT `reference`):
+  ```typescript
+  owner: ReferenceColumn({
+    label: 'Owner',
+    referenceTable: 'sys_user',  // ✅ CORRECT
+    // reference: 'sys_user'     // ❌ WRONG - will not work
+  })
+  ```
 
 ## Key Constraints
 - ROBUSTPROMPT.md: Read this first for app requirements (goal, data model, automation, security)
