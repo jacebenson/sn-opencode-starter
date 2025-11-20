@@ -100,6 +100,32 @@ export const install = tool({
   },
 })
 
+export const reinstall = tool({
+  description: "Reinstall a ServiceNow application on an instance",
+  args: {
+    project: tool.schema.string().optional().describe("Project name or path"),
+    auth: tool.schema.string().optional().describe("Authentication alias to use"),
+    instance: tool.schema.string().optional().describe("Instance URL"),
+  },
+  async execute(args, context) {
+    const { exec } = await import("child_process")
+    const { promisify } = await import("util")
+    const execAsync = promisify(exec)
+    
+    let cmd = "npx @servicenow/sdk install --reinstall"
+    if (args.project) cmd += ` --project ${args.project}`
+    if (args.auth) cmd += ` --auth ${args.auth}`
+    if (args.instance) cmd += ` --instance ${args.instance}`
+    
+    try {
+      const { stdout, stderr } = await execAsync(cmd, { maxBuffer: 10 * 1024 * 1024 })
+      return stdout || stderr || "Reinstallation completed successfully"
+    } catch (error: any) {
+      return `Reinstallation error: ${error.message}\n${error.stdout || ""}\n${error.stderr || ""}`
+    }
+  },
+})
+
 export const init = tool({
   description: "Initialize a new ServiceNow project",
   args: {
@@ -110,21 +136,56 @@ export const init = tool({
     auth: tool.schema.string().optional().describe("Authentication alias to use"),
   },
   async execute(args, context) {
-    const { exec } = await import("child_process")
-    const { promisify } = await import("util")
-    const execAsync = promisify(exec)
+    const { spawn } = await import("child_process")
     
-    let cmd = `npx @servicenow/sdk init --appName "${args.appName}" --scopeName "${args.scopeName}"`
-    if (args.packageName) cmd += ` --packageName "${args.packageName}"`
-    if (args.template) cmd += ` --template "${args.template}"`
-    if (args.auth) cmd += ` --auth ${args.auth}`
+    // Build command arguments array
+    const cmdArgs = ["@servicenow/sdk", "init"]
     
-    try {
-      const { stdout, stderr } = await execAsync(cmd, { maxBuffer: 10 * 1024 * 1024 })
-      return stdout || stderr || `Project ${args.appName} initialized successfully`
-    } catch (error: any) {
-      return `Initialization error: ${error.message}\n${error.stdout || ""}\n${error.stderr || ""}`
+    // Add required parameters
+    cmdArgs.push("--appName", args.appName)
+    cmdArgs.push("--scopeName", args.scopeName)
+    
+    // Add optional parameters
+    if (args.packageName) {
+      cmdArgs.push("--packageName", args.packageName)
     }
+    if (args.template) {
+      cmdArgs.push("--template", args.template)
+    }
+    if (args.auth) {
+      cmdArgs.push("--auth", args.auth)
+    }
+    
+    // Use spawn to handle interactive prompts better
+    return new Promise((resolve, reject) => {
+      const process = spawn("npx", cmdArgs, {
+        stdio: ["inherit", "pipe", "pipe"],
+        shell: true
+      })
+      
+      let stdout = ""
+      let stderr = ""
+      
+      process.stdout?.on("data", (data) => {
+        stdout += data.toString()
+      })
+      
+      process.stderr?.on("data", (data) => {
+        stderr += data.toString()
+      })
+      
+      process.on("close", (code) => {
+        if (code === 0) {
+          resolve(stdout || stderr || `Project ${args.appName} initialized successfully`)
+        } else {
+          reject(new Error(`Initialization failed with code ${code}\n${stdout}\n${stderr}`))
+        }
+      })
+      
+      process.on("error", (err) => {
+        reject(new Error(`Initialization error: ${err.message}`))
+      })
+    })
   },
 })
 
