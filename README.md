@@ -25,9 +25,10 @@ It provides a structured approach to manage your ServiceNow development workflow
     git clone https://github.com/jacebenson/sn-opencode-starter.git your-project-name
     cd your-project-name
     ```
+    Or go to https://github.com/jacebenson/sn-opencode-starter, click the green "Code" button, and select "Download ZIP". Extract the contents to your desired project directory.
 5. Set up your .env file
    - Create a copy of the `.env.example` file and rename it to `.env`
-   - Update the `.env` file with your ServiceNow instance details
+   - Update the `.env` file with your ServiceNow instance dev auth details (you'll set this up later with the SDK)
 5. Set up an admin account for your ServiceNow instance
     - Log in to your PDI at https://developer.servicenow.com
     - Elevate to the `security_admin` role
