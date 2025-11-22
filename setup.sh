@@ -1,188 +1,202 @@
 #!/bin/bash
 # ServiceNow OpenCode Starter - macOS/Linux Setup Script
-# This script automates the setup process for ServiceNow development on Unix-like systems
 
-set -e  # Exit on error
+set -e
 
 echo "========================================"
 echo "ServiceNow OpenCode Starter Setup"
 echo "========================================"
 echo ""
 
-# Ask if user wants to download the repo
-read -p "Do you want to download the starter repo? (y/N): " DOWNLOAD_REPO
-DOWNLOAD_REPO=${DOWNLOAD_REPO:-N}
+# ========================================
+# Step 1: Check Node.js
+# ========================================
+echo "Step 1: Checking Node.js..."
+if ! command -v node &> /dev/null; then
+    echo "ERROR: Node.js is not installed."
+    echo "Please install Node.js from: https://nodejs.org"
+    exit 1
+fi
 
-if [[ "$DOWNLOAD_REPO" =~ ^[Yy]$ ]]; then
+NODE_VERSION=$(node --version)
+echo "  Found: $NODE_VERSION"
+echo ""
+
+# ========================================
+# Step 2: Install OpenCode
+# ========================================
+echo "Step 2: Installing OpenCode..."
+npm install -g opencode-ai
+if [ $? -ne 0 ]; then
+    echo "ERROR: Failed to install OpenCode"
+    exit 1
+fi
+echo "  OpenCode installed successfully!"
+echo ""
+
+# ========================================
+# Step 3: Install ServiceNow SDK
+# ========================================
+echo "Step 3: Installing ServiceNow SDK..."
+echo ""
+echo "NOTE: The SDK installer may ask configuration questions."
+echo "You can usually just press Enter to accept defaults."
+echo ""
+npm install -g @servicenow/sdk
+if [ $? -ne 0 ]; then
+    echo "WARNING: ServiceNow SDK installation had issues, but continuing..."
+    echo "You can install it later with: npm install -g @servicenow/sdk"
     echo ""
-    read -p "Enter the full path where you want to create your project: " PROJECT_DIR
-    
+else
+    echo "  ServiceNow SDK installed successfully!"
+    echo ""
+fi
+
+# ========================================
+# Step 4: Setup Project
+# ========================================
+echo "Step 4: Project Setup"
+echo ""
+echo "Current directory: $(pwd)"
+echo ""
+read -p "Use current directory for project? (Y/N): " USE_CURRENT
+
+if [[ "$USE_CURRENT" =~ ^[Yy]$ ]]; then
+    PROJECT_DIR="$(pwd)"
+else
+    echo ""
+    echo "Default: $HOME/Projects/sn-lawncare"
+    read -p "Enter project path (or press Enter for default): " PROJECT_DIR
     if [ -z "$PROJECT_DIR" ]; then
-        echo "ERROR: No directory specified."
-        exit 1
+        PROJECT_DIR="$HOME/Projects/sn-lawncare"
     fi
-    
     # Expand ~ to home directory
     PROJECT_DIR="${PROJECT_DIR/#\~/$HOME}"
-    
+fi
+
+echo ""
+echo "Using project directory: $PROJECT_DIR"
+echo ""
+
+# Create directory if it doesn't exist
+if [ ! -d "$PROJECT_DIR" ]; then
+    echo "Creating directory..."
+    mkdir -p "$PROJECT_DIR"
+fi
+
+# ========================================
+# Step 5: Download Starter Repo
+# ========================================
+read -p "Download starter repo to this location? (Y/N): " DOWNLOAD
+if [[ "$DOWNLOAD" =~ ^[Yy]$ ]]; then
     echo ""
     echo "Downloading repository..."
+    
     ZIP_URL="https://github.com/jacebenson/sn-opencode-starter/archive/refs/heads/main.zip"
     TEMP_ZIP="/tmp/sn-opencode-starter.zip"
     
-    # Download using curl or wget
     if command -v curl &> /dev/null; then
         curl -L "$ZIP_URL" -o "$TEMP_ZIP"
     elif command -v wget &> /dev/null; then
         wget "$ZIP_URL" -O "$TEMP_ZIP"
     else
-        echo "ERROR: Neither curl nor wget is available. Please install one of them."
+        echo "ERROR: Neither curl nor wget is available."
         exit 1
     fi
     
-    echo "Extracting repository..."
+    echo "Extracting..."
     TEMP_EXTRACT="/tmp/sn-opencode-extract"
     mkdir -p "$TEMP_EXTRACT"
     unzip -q "$TEMP_ZIP" -d "$TEMP_EXTRACT"
     
-    # Create target directory and move contents
-    mkdir -p "$PROJECT_DIR"
+    echo "Copying files..."
     cp -r "$TEMP_EXTRACT/sn-opencode-starter-main/"* "$PROJECT_DIR/"
     
     # Clean up
     rm "$TEMP_ZIP"
     rm -rf "$TEMP_EXTRACT"
     
-    echo "Repository downloaded and extracted to: $PROJECT_DIR"
-    echo ""
-    echo "Changing to project directory..."
-    cd "$PROJECT_DIR"
+    echo "  Repository downloaded successfully!"
     echo ""
 fi
 
-# Check if NVM is installed
-echo "[1/7] Checking for NVM (Node Version Manager)..."
-if [ -s "$HOME/.nvm/nvm.sh" ]; then
-    source "$HOME/.nvm/nvm.sh"
-    echo "NVM is installed."
-elif [ -s "/usr/local/opt/nvm/nvm.sh" ]; then
-    source "/usr/local/opt/nvm/nvm.sh"
-    echo "NVM is installed."
-else
-    echo "NVM is not installed!"
-    echo "Installing NVM..."
-    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+# Change to project directory
+cd "$PROJECT_DIR"
+echo "Changed to: $PROJECT_DIR"
+echo ""
+
+# ========================================
+# Step 6: Setup .env
+# ========================================
+if [ -f ".env.example" ] && [ ! -f ".env" ]; then
+    echo "Setting up .env file..."
+    cp .env.example .env
+    echo "  .env file created"
+    echo ""
+fi
+
+# ========================================
+# Step 7: Setup ServiceNow Authentication
+# ========================================
+echo "Step 7: ServiceNow SDK Authentication"
+echo ""
+read -p "Do you want to set up ServiceNow authentication now? (Y/N): " SETUP_AUTH
+if [[ "$SETUP_AUTH" =~ ^[Yy]$ ]]; then
+    echo ""
+    read -p "Enter your ServiceNow instance (e.g., dev12345.service-now.com): " INSTANCE
     
-    # Source NVM for current session
-    export NVM_DIR="$HOME/.nvm"
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-    
-    if [ -s "$HOME/.nvm/nvm.sh" ]; then
-        source "$HOME/.nvm/nvm.sh"
-        echo "NVM installed successfully."
-    else
-        echo "ERROR: NVM installation failed. Please install manually from: https://github.com/nvm-sh/nvm"
-        exit 1
-    fi
-fi
-echo ""
-
-# Install and use LTS version of Node.js
-echo "[2/7] Installing LTS version of Node.js..."
-nvm install --lts
-if [ $? -ne 0 ]; then
-    echo "ERROR: Failed to install Node.js LTS"
-    exit 1
-fi
-echo ""
-
-echo "[2/7] Switching to LTS version of Node.js..."
-nvm use --lts
-if [ $? -ne 0 ]; then
-    echo "ERROR: Failed to switch to Node.js LTS"
-    exit 1
-fi
-echo ""
-
-# Install OpenCode globally
-echo "[3/7] Installing OpenCode globally..."
-npm install -g opencode-ai
-if [ $? -ne 0 ]; then
-    echo "ERROR: Failed to install OpenCode"
-    exit 1
-fi
-echo ""
-
-# Install ServiceNow SDK globally
-echo "[4/7] Installing ServiceNow SDK globally..."
-npm install -g @servicenow/sdk
-if [ $? -ne 0 ]; then
-    echo "ERROR: Failed to install ServiceNow SDK"
-    exit 1
-fi
-echo ""
-
-# Set up .env file
-echo "[5/7] Setting up .env file..."
-if [ -f .env ]; then
-    echo ".env file already exists. Skipping..."
-else
-    if [ -f .env.example ]; then
-        cp .env.example .env
-        echo ".env file created from .env.example"
-    else
-        echo "WARNING: .env.example not found. Please create .env manually."
-    fi
-fi
-echo ""
-
-# Ask for vendor code and update .env
-echo "[6/7] Setting up vendor code..."
-read -p "Enter your ServiceNow vendor code (e.g., 12345): " VENDOR_CODE
-
-if [ -n "$VENDOR_CODE" ]; then
-    echo "Updating .env file with vendor code..."
-    if [ -f .env ]; then
-        # Use sed to update the vendor code in .env
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            # macOS requires empty string after -i
-            sed -i '' "s/^SN_VENDOR_CODE=.*/SN_VENDOR_CODE=$VENDOR_CODE/" .env
+    if [ -n "$INSTANCE" ]; then
+        echo ""
+        echo "Setting up authentication for: $INSTANCE"
+        echo ""
+        echo "When prompted:"
+        echo "  1. Select 'basic' for authentication type"
+        echo "  2. Enter your username"
+        echo "  3. Enter your password"
+        echo ""
+        read -p "Press Enter to continue..."
+        
+        npx @servicenow/sdk auth --add "$INSTANCE" --alias dev
+        
+        if [ $? -eq 0 ]; then
+            echo ""
+            echo "  Authentication configured successfully!"
+            echo ""
         else
-            # Linux
-            sed -i "s/^SN_VENDOR_CODE=.*/SN_VENDOR_CODE=$VENDOR_CODE/" .env
+            echo ""
+            echo "  Authentication setup had issues. You can try again later with:"
+            echo "  npx @servicenow/sdk auth --add $INSTANCE --alias dev"
+            echo ""
         fi
-        echo "Vendor code set to: $VENDOR_CODE"
-    else
-        echo "WARNING: .env file not found. Please set vendor code manually."
     fi
 else
-    echo "No vendor code provided. You can set it later in the .env file."
+    echo ""
+    echo "Skipping authentication setup."
+    echo "You can set it up later with:"
+    echo "  npx @servicenow/sdk auth --add YOUR_INSTANCE --alias dev"
+    echo ""
 fi
-echo ""
 
-# Provide instructions for manual steps
-echo "[7/7] Manual steps required:"
+# ========================================
+# Done!
+# ========================================
+echo "========================================"
+echo "Setup Complete!"
 echo "========================================"
 echo ""
 echo "NEXT STEPS:"
+echo "1. Set your vendor code in .env file (if not done already)"
 echo ""
-echo "1. Set up an admin account on your ServiceNow instance:"
-echo "   - Log in to your PDI at https://developer.servicenow.com"
-echo "   - Elevate to the 'security_admin' role"
-echo "   - Create an admin user for your instance"
-echo "   - Give the user the 'admin' and 'security_admin' roles"
-echo "   - Set the password and save it"
+echo "To manage authentication later:"
+echo "  npx @servicenow/sdk auth --add YOUR_INSTANCE --alias dev"
 echo ""
-echo "2. Set up ServiceNow SDK authentication:"
-echo "   Run: npx @servicenow/sdk auth --add YOUR_INSTANCE --alias dev"
-echo "   - Select 'basic' authentication when prompted"
-echo "   - Enter the username and password from step 1"
-echo "   - Credentials will be stored in your system keychain"
+read -p "Start OpenCode now? (Y/n): " START
+START=${START:-Y}
+
+if [[ "$START" =~ ^[Yy]$ ]]; then
+    echo ""
+    echo "Starting OpenCode..."
+    opencode
+fi
+
 echo ""
-echo "3. Your .env file is ready with the vendor code"
-echo "   - No additional .env configuration needed for SDK tools"
-echo "   - SDK tools use your system keychain for authentication"
-echo ""
-echo "========================================"
-echo "Setup complete! (except manual steps above)"
-echo "========================================"

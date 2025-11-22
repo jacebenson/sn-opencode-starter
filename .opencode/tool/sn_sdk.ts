@@ -156,29 +156,18 @@ export const init = tool({
       cmdArgs.push("--auth", args.auth)
     }
     
-    // Use spawn to handle interactive prompts better
+    // Use spawn with full inheritance for interactive commands
     return new Promise((resolve, reject) => {
       const process = spawn("npx", cmdArgs, {
-        stdio: ["inherit", "pipe", "pipe"],
+        stdio: "inherit",  // Changed from ["inherit", "pipe", "pipe"] to "inherit"
         shell: true
-      })
-      
-      let stdout = ""
-      let stderr = ""
-      
-      process.stdout?.on("data", (data) => {
-        stdout += data.toString()
-      })
-      
-      process.stderr?.on("data", (data) => {
-        stderr += data.toString()
       })
       
       process.on("close", (code) => {
         if (code === 0) {
-          resolve(stdout || stderr || `Project ${args.appName} initialized successfully`)
+          resolve(`Project ${args.appName} initialized successfully`)
         } else {
-          reject(new Error(`Initialization failed with code ${code}\n${stdout}\n${stderr}`))
+          reject(new Error(`Initialization failed with code ${code}`))
         }
       })
       

@@ -1,167 +1,201 @@
 @echo off
 setlocal enabledelayedexpansion
-REM ServiceNow OpenCode Starter - Windows Setup Script
-REM This script automates the setup process for ServiceNow development on Windows
 
 echo ========================================
 echo ServiceNow OpenCode Starter Setup
 echo ========================================
 echo.
 
-REM Ask if user wants to download the repo
-set "DOWNLOAD_REPO=N"
-set /p "DOWNLOAD_REPO=Do you want to download the starter repo? (Y/N, default: N): "
-if /i "!DOWNLOAD_REPO!"=="Y" (
+REM ========================================
+REM Step 1: Check Node.js
+REM ========================================
+echo Step 1: Checking Node.js...
+node --version >nul 2>&1
+if !errorlevel! neq 0 (
+    echo ERROR: Node.js is not installed.
+    echo Please install Node.js from: https://nodejs.org
+    pause
+    exit /b 1
+)
+
+for /f "tokens=*" %%i in ('node --version') do set NODE_VERSION=%%i
+echo   Found: !NODE_VERSION!
+echo.
+
+REM ========================================
+REM Step 2: Install OpenCode
+REM ========================================
+echo Step 2: Installing OpenCode...
+call npm install -g opencode-ai
+if !errorlevel! neq 0 (
+    echo ERROR: Failed to install OpenCode
+    pause
+    exit /b 1
+)
+echo   OpenCode installed successfully!
+echo.
+
+REM ========================================
+REM Step 3: Install ServiceNow SDK
+REM ========================================
+echo Step 3: Installing ServiceNow SDK...
+echo.
+echo NOTE: The SDK installer may ask about nvm-windows location.
+echo If you have NVM installed, enter the path (e.g., C:\Users\YourName\AppData\Roaming\nvm)
+echo If you don't have NVM, just press Enter to skip.
+echo.
+call npm install -g @servicenow/sdk
+if !errorlevel! neq 0 (
+    echo WARNING: ServiceNow SDK installation had issues, but continuing...
+    echo You can install it later with: npm install -g @servicenow/sdk
     echo.
-    echo Where would you like to create your project?
-    set /p "PROJECT_DIR=Enter full path (e.g., C:\Projects\my-sn-app): "
-    
+) else (
+    echo   ServiceNow SDK installed successfully!
+    echo.
+)
+
+REM ========================================
+REM Step 4: Setup Project
+REM ========================================
+echo Step 4: Project Setup
+echo.
+echo Current directory: %CD%
+echo.
+set /p "USE_CURRENT=Use current directory for project? (Y/N): "
+
+if /i "!USE_CURRENT!"=="Y" (
+    set "PROJECT_DIR=%CD%"
+) else (
+    echo.
+    echo Default: C:\Projects\sn-lawncare
+    set /p "PROJECT_DIR=Enter project path (or press Enter for default): "
     if "!PROJECT_DIR!"=="" (
-        echo ERROR: No directory specified.
-        pause
-        exit /b 1
+        set "PROJECT_DIR=C:\Projects\sn-lawncare"
     )
-    
+)
+
+echo.
+echo Using project directory: !PROJECT_DIR!
+echo.
+
+REM Create directory if it doesn't exist
+if not exist "!PROJECT_DIR!" (
+    echo Creating directory...
+    mkdir "!PROJECT_DIR!"
+)
+
+REM ========================================
+REM Step 5: Download Starter Repo
+REM ========================================
+set /p "DOWNLOAD=Download starter repo to this location? (Y/N): "
+if /i "!DOWNLOAD!"=="Y" (
     echo.
     echo Downloading repository...
+    
     set "ZIP_URL=https://github.com/jacebenson/sn-opencode-starter/archive/refs/heads/main.zip"
     set "TEMP_ZIP=%TEMP%\sn-opencode-starter.zip"
     
-    REM Use PowerShell to download the ZIP
-    powershell -Command "& {[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '!ZIP_URL!' -OutFile '!TEMP_ZIP!'}"
+    powershell -Command "Invoke-WebRequest -Uri '!ZIP_URL!' -OutFile '!TEMP_ZIP!'"
     if !errorlevel! neq 0 (
         echo ERROR: Failed to download repository
         pause
         exit /b 1
     )
     
-    echo Extracting repository...
-    REM Use PowerShell to extract the ZIP
-    powershell -Command "& {Expand-Archive -Path '!TEMP_ZIP!' -DestinationPath '%TEMP%\sn-opencode-extract' -Force}"
-    if !errorlevel! neq 0 (
-        echo ERROR: Failed to extract repository
-        del "!TEMP_ZIP!"
-        pause
-        exit /b 1
-    )
+    echo Extracting...
+    powershell -Command "Expand-Archive -Path '!TEMP_ZIP!' -DestinationPath '%TEMP%\sn-opencode-extract' -Force"
     
-    REM Create target directory and move contents
-    if not exist "!PROJECT_DIR!" mkdir "!PROJECT_DIR!"
+    echo Copying files...
     xcopy /E /I /Y "%TEMP%\sn-opencode-extract\sn-opencode-starter-main\*" "!PROJECT_DIR!\"
     
     REM Clean up
     del "!TEMP_ZIP!"
     rmdir /S /Q "%TEMP%\sn-opencode-extract"
     
-    echo Repository downloaded and extracted to: !PROJECT_DIR!
-    echo.
-    echo Changing to project directory...
-    cd /d "!PROJECT_DIR!"
+    echo   Repository downloaded successfully!
     echo.
 )
 
-REM Check if NVM is installed
-echo [1/7] Checking for NVM (Node Version Manager)...
-where nvm >nul 2>&1
-if %errorlevel% neq 0 (
-    echo ERROR: NVM is not installed!
-    echo Please install NVM for Windows from: https://github.com/coreybutler/nvm-windows
-    echo Download nvm-setup.exe from the releases page and run it.
-    pause
-    exit /b 1
-)
-echo NVM is installed.
+REM Change to project directory
+cd /d "!PROJECT_DIR!"
+echo Changed to: !PROJECT_DIR!
 echo.
 
-REM Install and use LTS version of Node.js
-echo [2/7] Installing LTS version of Node.js...
-call nvm install lts
-if %errorlevel% neq 0 (
-    echo ERROR: Failed to install Node.js LTS
-    pause
-    exit /b 1
-)
-echo.
-
-echo [2/7] Switching to LTS version of Node.js...
-call nvm use lts
-if %errorlevel% neq 0 (
-    echo ERROR: Failed to switch to Node.js LTS
-    pause
-    exit /b 1
-)
-echo.
-
-REM Install OpenCode globally
-echo [3/7] Installing OpenCode globally...
-call npm install -g opencode-ai
-if %errorlevel% neq 0 (
-    echo ERROR: Failed to install OpenCode
-    pause
-    exit /b 1
-)
-echo.
-
-REM Install ServiceNow SDK globally
-echo [4/7] Installing ServiceNow SDK globally...
-call npm install -g @servicenow/sdk
-if %errorlevel% neq 0 (
-    echo ERROR: Failed to install ServiceNow SDK
-    pause
-    exit /b 1
-)
-echo.
-
-REM Set up .env file
-echo [5/7] Setting up .env file...
-if exist .env (
-    echo .env file already exists. Skipping...
-) else (
-    if exist .env.example (
-        copy .env.example .env
-        echo .env file created from .env.example
-    ) else (
-        echo WARNING: .env.example not found. Please create .env manually.
+REM ========================================
+REM Step 6: Setup .env
+REM ========================================
+if exist ".env.example" (
+    if not exist ".env" (
+        echo Setting up .env file...
+        copy .env.example .env >nul
+        echo   .env file created
+        echo.
     )
 )
-echo.
 
-REM Ask for vendor code and update .env
-echo [6/7] Setting up vendor code...
-set /p "VENDOR_CODE=Enter your ServiceNow vendor code (e.g., 12345): "
-if not "!VENDOR_CODE!"=="" (
-    echo Updating .env file with vendor code...
-    powershell -Command "(Get-Content .env) -replace '^SN_VENDOR_CODE=.*', 'SN_VENDOR_CODE=!VENDOR_CODE!' | Set-Content .env"
-    echo Vendor code set to: !VENDOR_CODE!
+REM ========================================
+REM Step 7: Setup ServiceNow Authentication
+REM ========================================
+echo Step 7: ServiceNow SDK Authentication
+echo.
+set /p "SETUP_AUTH=Do you want to set up ServiceNow authentication now? (Y/N): "
+if /i "!SETUP_AUTH!"=="Y" (
+    echo.
+    set /p "INSTANCE=Enter your ServiceNow instance (e.g., dev12345.service-now.com): "
+    
+    if not "!INSTANCE!"=="" (
+        echo.
+        echo Setting up authentication for: !INSTANCE!
+        echo.
+        echo When prompted:
+        echo   1. Select "basic" for authentication type
+        echo   2. Enter your username
+        echo   3. Enter your password
+        echo.
+        pause
+        
+        npx @servicenow/sdk auth --add !INSTANCE! --alias dev
+        
+        if !errorlevel! equ 0 (
+            echo.
+            echo   Authentication configured successfully!
+            echo.
+        ) else (
+            echo.
+            echo   Authentication setup had issues. You can try again later with:
+            echo   npx @servicenow/sdk auth --add !INSTANCE! --alias dev
+            echo.
+        )
+    )
 ) else (
-    echo No vendor code provided. You can set it later in the .env file.
+    echo.
+    echo Skipping authentication setup.
+    echo You can set it up later with:
+    echo   npx @servicenow/sdk auth --add YOUR_INSTANCE --alias dev
+    echo.
 )
-echo.
 
-REM Provide instructions for manual steps
-echo [7/7] Manual steps required:
+REM ========================================
+REM Done!
+REM ========================================
+echo ========================================
+echo Setup Complete!
 echo ========================================
 echo.
 echo NEXT STEPS:
+echo 1. Set your vendor code in .env file (if not done already)
 echo.
-echo 1. Set up an admin account on your ServiceNow instance:
-echo    - Log in to your PDI at https://developer.servicenow.com
-echo    - Elevate to the 'security_admin' role
-echo    - Create an admin user for your instance
-echo    - Give the user the 'admin' and 'security_admin' roles
-echo    - Set the password and save it
+echo To manage authentication later:
+echo   npx @servicenow/sdk auth --add YOUR_INSTANCE --alias dev
 echo.
-echo 2. Set up ServiceNow SDK authentication:
-echo    Run: npx @servicenow/sdk auth --add YOUR_INSTANCE --alias dev
-echo    - Select 'basic' authentication when prompted
-echo    - Enter the username and password from step 1
-echo    - Credentials will be stored in your system keychain
+set /p "START=Start OpenCode now? (Y/N, default Y): "
+if "!START!"=="" set "START=Y"
+
+if /i "!START!"=="Y" (
+    echo.
+    echo Starting OpenCode...
+    opencode
+)
+
 echo.
-echo 3. Your .env file is ready with the vendor code
-echo    - No additional .env configuration needed for SDK tools
-echo    - SDK tools use your system keychain for authentication
-echo.
-echo ========================================
-echo Setup complete! (except manual steps above)
-echo ========================================
 pause
