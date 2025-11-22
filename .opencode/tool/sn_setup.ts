@@ -3,22 +3,22 @@ import { tool } from "@opencode-ai/plugin"
 /**
  * ServiceNow Setup and Environment Tools
  * 
- * These tools help manage the ServiceNow development environment,
- * including vendor code management and environment configuration.
+ * These tools help manage the ServiceNow development environment.
+ * 
+ * .env Usage:
+ * - Reads/writes: SN_VENDOR_CODE (vendor code for scoping)
+ * - Reads: PROFILE_<alias> (passwords for SDK auth profiles, only when fetching from instance)
  */
 
 export const getVendorCode = tool({
-  description: "Get the ServiceNow vendor code from .env file, optionally fetching from instance if missing",
+  description: "Get the ServiceNow vendor code from .env file (SN_VENDOR_CODE), optionally fetching from instance if missing. Delegates to sn_api_getVendorCode for fetching.",
   args: {
-    fetchIfMissing: tool.schema.boolean().optional().describe("Fetch from instance and save to .env if not found locally (default: false)"),
+    fetchIfMissing: tool.schema.boolean().optional().describe("Fetch from instance using sn_api_getVendorCode and save to .env if not found locally (default: false)"),
     auth: tool.schema.string().optional().describe("Auth profile alias to use when fetching from instance"),
   },
   async execute(args, context) {
     try {
-      const { readFile, writeFile } = await import('fs/promises')
-      const { exec } = await import("child_process")
-      const { promisify } = await import("util")
-      const execAsync = promisify(exec)
+      const { readFile } = await import('fs/promises')
       const envPath = '.env'
       
       // Check if .env file exists
@@ -28,15 +28,10 @@ export const getVendorCode = tool({
       } catch (error: any) {
         if (error.code === 'ENOENT') {
           if (!args.fetchIfMissing) {
-            return `❌ .env file not found\n\nPlease create a .env file or use fetchIfMissing=true to fetch vendor code from instance.`
+            return `❌ .env file not found\n\nPlease create a .env file or use fetchIfMissing=true to fetch vendor code from instance.\n\nTo create .env:\n  cp .env.example .env`
           }
-          // Create .env from .env.example if it exists
-          try {
-            const exampleContent = await readFile('.env.example', 'utf-8')
-            envContent = exampleContent
-          } catch {
-            envContent = '# ServiceNow Configuration\n'
-          }
+          // If fetchIfMissing, we'll let sn_api_getVendorCode handle it
+          return `❌ .env file not found\n\nPlease use the sn_api_getVendorCode tool with saveToEnv=true to fetch and save the vendor code.\n\nAlternatively, create .env manually:\n  cp .env.example .env\n  # Add: SN_VENDOR_CODE=xxxxx`
         } else {
           throw error
         }
@@ -52,117 +47,11 @@ export const getVendorCode = tool({
       
       // Vendor code not found or empty
       if (!args.fetchIfMissing) {
-        return `⚠ Vendor code not set in .env file\n\nThe SN_VENDOR_CODE variable is empty or missing.\n\nOptions:\n1. Manually add it to .env: SN_VENDOR_CODE=x_xxxxx\n2. Run this tool with fetchIfMissing=true to fetch it from your instance`
+        return `⚠ Vendor code not set in .env file\n\nThe SN_VENDOR_CODE variable is empty or missing.\n\nOptions:\n1. Manually add it to .env: SN_VENDOR_CODE=xxxxx\n2. Use sn_api_getVendorCode tool with saveToEnv=true to fetch from instance`
       }
       
-      // Fetch from instance
-      console.log('Fetching vendor code from ServiceNow instance...')
-      
-      // Get auth credentials
-      const { stdout: authList } = await execAsync('npx @servicenow/sdk auth --list')
-      
-      // Parse auth profiles
-      interface AuthProfile {
-        alias: string
-        host: string
-        username: string
-        type: string
-        default: boolean
-      }
-      
-      const profiles: AuthProfile[] = []
-      const lines = authList.split('\n')
-      let currentProfile: Partial<AuthProfile> = {}
-      
-      for (const line of lines) {
-        const aliasMatch = line.match(/^\*?\[(.+)\]/)
-        if (aliasMatch) {
-          if (currentProfile.alias) {
-            profiles.push(currentProfile as AuthProfile)
-          }
-          currentProfile = {
-            alias: aliasMatch[1],
-            default: line.startsWith('*')
-          }
-        } else if (line.includes('host =')) {
-          currentProfile.host = line.split('=')[1].trim()
-        } else if (line.includes('username =')) {
-          currentProfile.username = line.split('=')[1].trim()
-        } else if (line.includes('type =')) {
-          currentProfile.type = line.split('=')[1].trim()
-        }
-      }
-      
-      if (currentProfile.alias) {
-        profiles.push(currentProfile as AuthProfile)
-      }
-      
-      // Find the profile to use
-      let profile: AuthProfile | undefined
-      if (args.auth) {
-        profile = profiles.find(p => p.alias === args.auth)
-        if (!profile) {
-          return `❌ Auth profile '${args.auth}' not found\n\nAvailable profiles: ${profiles.map(p => p.alias).join(', ')}\n\nRun: npx @servicenow/sdk auth --list`
-        }
-      } else {
-        profile = profiles.find(p => p.default) || profiles[0]
-        if (!profile) {
-          return `❌ No auth profiles found\n\nPlease run: npx @servicenow/sdk auth --add <instance>`
-        }
-      }
-      
-      // Get password from environment
-      const envKey = `PROFILE_${profile.alias}`
-      const password = process.env[envKey]
-      
-      if (!password) {
-        return `❌ Password not found in .env file\n\nAdd this line to your .env file:\n${envKey}="your_password_here"`
-      }
-      
-      // Make API request to fetch vendor code
-      const url = `${profile.host}/api/now/table/sys_properties?sysparm_query=name=glide.appcreator.company.code&sysparm_fields=value,name`
-      const auth = Buffer.from(`${profile.username}:${password}`).toString('base64')
-      
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Basic ${auth}`,
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        }
-      })
-      
-      if (!response.ok) {
-        const text = await response.text()
-        return `❌ Failed to fetch vendor code from instance (${response.status})\n\n${text}\n\nInstance: ${profile.host}\nProfile: ${profile.alias}`
-      }
-      
-      const result = await response.json()
-      
-      if (!result.result || result.result.length === 0) {
-        return `❌ Vendor code not found on instance\n\nThe property 'glide.appcreator.company.code' may not be set on instance ${profile.host}`
-      }
-      
-      const vendorCode = result.result[0].value
-      
-      if (!vendorCode) {
-        return `❌ Vendor code property exists but has no value\n\nInstance: ${profile.host}\nPlease set the vendor code in ServiceNow: System Properties > glide.appcreator.company.code`
-      }
-      
-      // Save to .env
-      if (envContent.includes('SN_VENDOR_CODE=')) {
-        // Update existing line
-        envContent = envContent.replace(
-          /SN_VENDOR_CODE=.*/,
-          `SN_VENDOR_CODE=${vendorCode}`
-        )
-      } else {
-        // Add new line
-        envContent += `\n# Vendor code fetched from ${profile.host} on ${new Date().toISOString()}\nSN_VENDOR_CODE=${vendorCode}\n`
-      }
-      
-      await writeFile(envPath, envContent, 'utf-8')
-      
-      return `✓ Vendor code retrieved and saved: ${vendorCode}\n\nInstance: ${profile.host}\nProfile: ${profile.alias}\nSaved to: .env\n\nYou can now use this vendor code for initializing ServiceNow projects.`
+      // Suggest using sn_api_getVendorCode instead
+      return `⚠ Vendor code not found in .env\n\nTo fetch vendor code from your instance, use the sn_api_getVendorCode tool:\n  - Tool: sn_api_getVendorCode\n  - Args: { saveToEnv: true${args.auth ? `, auth: "${args.auth}"` : ''} }\n\nThis will fetch the vendor code from your ServiceNow instance and save it to .env.`
       
     } catch (error: any) {
       return `❌ Error: ${error.message}\n\n${error.stack || ''}`
@@ -171,7 +60,7 @@ export const getVendorCode = tool({
 })
 
 export const checkEnv = tool({
-  description: "Check the .env file for required ServiceNow configuration and report status",
+  description: "Check the .env file for SN_VENDOR_CODE configuration and report status. Note: SDK auth profile passwords (PROFILE_*) are optional in .env but recommended for SDK CLI tools.",
   args: {},
   async execute(args, context) {
     try {
@@ -197,7 +86,7 @@ export const checkEnv = tool({
         throw error
       }
       
-      // Check vendor code
+      // Check vendor code (PRIMARY CONCERN)
       const vendorCodeMatch = envContent.match(/^SN_VENDOR_CODE=(.*)$/m)
       const vendorCode = vendorCodeMatch ? vendorCodeMatch[1].trim() : ''
       
@@ -205,7 +94,7 @@ export const checkEnv = tool({
         report += `✓ Vendor code configured: ${vendorCode}\n`
       } else {
         report += "⚠ Vendor code not set (SN_VENDOR_CODE is empty)\n"
-        report += "   Run: getVendorCode with fetchIfMissing=true\n"
+        report += "   Use sn_api_getVendorCode with saveToEnv=true to fetch from instance\n"
       }
       report += "\n"
       
@@ -226,9 +115,8 @@ export const checkEnv = tool({
         if (profileAliases.length > 0) {
           report += `✓ SDK auth profiles configured: ${profileAliases.join(', ')}\n\n`
           
-          // Check passwords in .env
-          report += "## Profile Passwords in .env:\n\n"
-          let allPasswordsFound = true
+          // Check passwords in .env (OPTIONAL but helpful info)
+          report += "## Profile Passwords in .env (optional, but recommended for SDK CLI):\n\n"
           for (const alias of profileAliases) {
             const envKey = `PROFILE_${alias}`
             const hasPassword = envContent.includes(`${envKey}=`) && 
@@ -237,14 +125,9 @@ export const checkEnv = tool({
             if (hasPassword) {
               report += `✓ ${envKey} configured\n`
             } else {
-              report += `❌ ${envKey} missing or empty\n`
-              report += `   Add to .env: ${envKey}="your_password_here"\n`
-              allPasswordsFound = false
+              report += `ℹ ${envKey} not set (optional)\n`
+              report += `   Add to .env if using SDK CLI: ${envKey}="your_password_here"\n`
             }
-          }
-          
-          if (allPasswordsFound) {
-            report += "\n✓ All profile passwords configured\n"
           }
         } else {
           report += "⚠ No SDK auth profiles found\n"
@@ -258,7 +141,8 @@ export const checkEnv = tool({
       
       report += "\n## Summary:\n\n"
       if (vendorCode && !report.includes('❌')) {
-        report += "✓ Environment is properly configured for ServiceNow development\n"
+        report += "✓ Environment is configured for ServiceNow development\n"
+        report += "ℹ Profile passwords in .env are optional but recommended for SDK CLI tools\n"
       } else {
         report += "⚠ Some configuration is missing - see details above\n"
       }

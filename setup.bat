@@ -155,8 +155,11 @@ echo 2. Set up ServiceNow SDK authentication:
 echo    Run: npx @servicenow/sdk auth --add YOUR_INSTANCE --alias dev
 echo    - Select 'basic' authentication when prompted
 echo    - Enter the username and password from step 1
+echo    - Credentials will be stored in your system keychain
 echo.
-echo 3. Update your .env file with your instance details
+echo 3. Your .env file is ready with the vendor code
+echo    - No additional .env configuration needed for SDK tools
+echo    - SDK tools use your system keychain for authentication
 echo.
 echo ========================================
 echo Setup complete! (except manual steps above)

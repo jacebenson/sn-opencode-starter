@@ -68,6 +68,9 @@ You have two options for setting up your ServiceNow development environment on W
     - Replace `YOUR_INSTANCE` with your instance name (e.g., `dev12345`)
     - When prompted, select `basic` authentication
     - Enter the username and password for the admin user you created in the previous step
+    - Credentials will be stored in your system keychain (not in `.env`)
+
+**Note:** Your `.env` file only needs the `SN_VENDOR_CODE`. The SDK stores authentication credentials in your system keychain/credential manager, so no passwords are needed in `.env` for SDK tools.
 
 ---
 
@@ -162,6 +165,9 @@ You have two options for setting up your ServiceNow development environment on m
     - Replace `YOUR_INSTANCE` with your instance name (e.g., `dev12345`)
     - When prompted, select `basic` authentication
     - Enter the username and password for the admin user you created in the previous step
+    - Credentials will be stored in your system keychain (not in `.env`)
+
+**Note:** Your `.env` file only needs the `SN_VENDOR_CODE`. The SDK stores authentication credentials in your system keychain/credential manager, so no passwords are needed in `.env` for SDK tools.
 
 ---
 
